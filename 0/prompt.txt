@@ -1,0 +1,13 @@
+Hey, could you read the files CHALLENGE.md (which details the task and the files to submit), docs/requirements.md (which details the operating context, behavior to do, and the test cases), materials/office-policy.md (which details the fields to extract, the five review queue rules, processing and recovery), and snapshot.schema.json (which details the format of the record that each extraction must match). Finally, the folder materials/requests/ has the 20 message exports (read a few to see what format they come in). After reading these, could you draft 'planning/spec.md'? We need one numbered requirement per line (R-01, R-02, etc), each with one testable sentence. For each req, the file and section it comes from, with the exact words quoted; how it will be checked (i.e. which test, which file to inspect, and which command to run). Make sure nothing new is invented - a requriement the files do not state is not in the spec.
+
+---
+
+Could you check that each of the following requirements have their own separate line?    - every fact the policy says to extract, and the rules for missing, conflicting and corrected values;
+   - each of the five review-queue rules, in the policy's order;
+   - each processing and recovery rule: errors, retries, hashes, reruns, changed input, history;
+   - each file `CHALLENGE.md` asks you to submit;
+   - each case `docs/requirements.md` § Verification lists.
+
+---
+
+Thank you! I'd like to research now any points of ambiguity that the text might leave unclear. Could you list every place where two readings are possible, or where a term is not defined?
