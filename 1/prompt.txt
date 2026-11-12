@@ -1,0 +1,15 @@
+Could you read CHALLENGE.md, docs/requirements.md, materials/office-policy.md and snapshot.schema.json, and planning/spec.md. Then list every place of ambiguity, like  where two readings are
+   possible, or where a term is not defined, in an ## Open Questions section in the spec.md
+
+---
+
+There are too many open questions for me to review. Can you boil this down to 10 most important and impactful points of ambiguity that could result in disruptions to a production pipeline?
+
+---
+
+For each of the remaining open questions, could you list (don't add to spec.md yet) the possible files where I can look it up (in the files first, then in the
+   documentation of the tool or standard it names) and write what you found.
+
+---
+
+Okay, this looks good. Could you add a "Findings" section to each of the question and in one sentence explain the findings?
