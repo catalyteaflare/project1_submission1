@@ -1,0 +1,9 @@
+Committed! Ready to continue
+
+---
+
+Is it just step 2 that's done, or steps 2-6?
+
+---
+
+I won't do commits for each step, I'll just test. Let's continue through step 6, I'll test, and then we commit steps 2-6
