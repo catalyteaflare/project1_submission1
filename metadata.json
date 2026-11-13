@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.13.3",
+  "checkpoint_id": "01M7ANAMYEQYEF9R88D1GF53TZ",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tests/mock_responses/http-429.json",
+    "tests/mock_responses/http-503.json",
+    "tests/mock_responses/http-bad-envelope.json",
+    "tests/mock_responses/http-bad-json.json",
+    "tests/mock_responses/http-bad-utf8.json",
+    "tests/mock_responses/http-complete.json",
+    "tests/mock_responses/http-incomplete.json",
+    "tests/mock_responses/http-refusal-with-content.json",
+    "tests/mock_responses/http-refusal.json",
+    "tests/mock_responses/http-unauthorized.json",
+    "tests/test_adapter.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 9989,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1516032,
+    "output_tokens": 8675,
+    "api_call_count": 6
+  },
+  "redaction": {
+    "replacements": 11,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 6,
+      "credentialed_uri": 0,
+      "entropy": 6,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
