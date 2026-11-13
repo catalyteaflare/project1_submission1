@@ -1,0 +1,11 @@
+Committed, ready for final Step 10
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"I’ll submit the URL myself","question":"Step 10 requires submitting only the repository URL through Classroom. Have you already submitted it, or will you handle that final action? No Classroom connection is available in this workspace.","questionItemId":"[\"request_user_input_async\",\"call_f31c6a79ae624a64a75850b6a258662a\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+I have submitted the Classroom submission. Do we also need to mofdify README?
