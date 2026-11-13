@@ -1,0 +1,5 @@
+{
+  "status": "completed",
+  "refusal": null,
+  "output_text": "{\"request_id\":\"IT-901\",\"request_date\":\"2026-10-22\",\"kind\":\"other\",\"requester\":null,\"team\":\"Café\",\"system\":null,\"environment\":null,\"permission\":null,\"business_purpose\":null,\"start_date\":null,\"end_date\":null,\"manager\":null,\"supporting_quotes\":[\"IT-901, 2026-10-22: Café team needs help.\"],\"issues\":[\"Missing requester\",\"Missing system\",\"Missing environment\",\"Missing permission\",\"Missing business_purpose\",\"Missing start_date\",\"Missing end_date\",\"Missing manager\"]}"
+}
