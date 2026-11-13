@@ -1,10 +1,12 @@
-test_T01 (test_mock_provider.MockProviderContract.test_T01)
-Replay once per call, including deterministic errors and held replies. ... ok
-test_a_mock_reply_is_read_with_no_key_and_no_network (test_starter.MockResponse.test_a_mock_reply_is_read_with_no_key_and_no_network) ... ok
-test_each_request_export_has_message_text_and_a_hash (test_starter.SuppliedFiles.test_each_request_export_has_message_text_and_a_hash) ... ok
-test_the_schema_names_the_fields_it_requires (test_starter.SuppliedFiles.test_the_schema_names_the_fields_it_requires) ... ok
+Step 9 final verification — 2026-11-13 UTC
+Command: env -u API_KEY python3 -m unittest discover -s tests
+Host: CPython 3.12.3, Linux, SQLite 3.45.1
+Origin/configuration: saved tests/mock_responses fixtures, fake HTTP transports,
+mock/saved-envelope; source-derived expected_facts.json; temporary SQLite;
+no live calls or real credential access. T41 runs README setup offline.
 
+............................................
 ----------------------------------------------------------------------
-Ran 4 tests in 0.006s
+Ran 44 tests in 34.279s
 
 OK

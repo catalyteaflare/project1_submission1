@@ -29,7 +29,8 @@ env -u API_KEY python3 -m access_intake resume --state .runtime/state.sqlite --w
 ```
 
 State and snapshot output directories are created as needed. `.runtime/` is
-ignored by Git. The packaging and final deliverables walkthrough is step 9.
+ignored by Git. The [README](../README.md) includes the locked setup and final
+deliverables walkthrough.
 
 ## Inspect during intake
 
@@ -151,8 +152,36 @@ The command returns a manifest identifying one immutable generation containing
 `extractions.jsonl` and `queue.json`. Read the pair with
 `access_intake.snapshots.read_snapshot(directory)` so one resolved generation and
 both checksums are used. Unreferenced generations are ignored; old generations
-remain available to readers. Final deliverable copying and accuracy reporting
-are step 9.
+remain available to readers. For offline handover, pin and copy the exact
+generation produced by this export:
+
+```sh
+env -u API_KEY python3 -m access_intake export --state .runtime/state.sqlite --out .runtime/snapshots --copy-to deliverables
+```
+
+Both files are checksum-verified before copying. Fixed destination filenames
+are replaced individually and are for offline handover; concurrent readers
+continue to use the immutable generation interface. The copied
+`snapshot-manifest.json` records the generation and final byte hashes.
+
+## Accuracy against the source ledger
+
+The [README](../README.md) prepares a separate state containing the 20 supplied
+messages and authored T27 paraphrase. Compare that state using:
+
+```sh
+env -u API_KEY python3 -m access_intake accuracy --state .runtime/accuracy.sqlite --expected tests/expected_facts.json
+```
+
+The command reads one current terminal snapshot and reports scalar, routing,
+evidence and issue comparisons with observation origins/settings. Missing
+records and failed extractions remain in the denominator. Scoring just the 20
+supplied exports reports the missing paraphrase rather than shrinking the
+252-field denominator. Duplicate/unknown documents and non-office policy
+versions are rejected. Exit 0 means a comparison report was produced, even when
+it lists mismatches. See [accuracy.md](../deliverables/accuracy.md) for expected
+facts, source quotations and counting rules; inspect pending work separately
+with progress before treating a measurement as complete.
 
 ## Live mode and verification limits
 

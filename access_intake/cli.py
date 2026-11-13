@@ -20,7 +20,7 @@ from .validation import SCHEMA
 def _parser():
     parser = argparse.ArgumentParser(prog="python3 -m access_intake")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("intake", "queue", "progress", "history", "retry", "resume", "refresh", "export"):
+    for name in ("intake", "queue", "progress", "history", "retry", "resume", "refresh", "export", "accuracy"):
         command = commands.add_parser(name)
         command.add_argument("--state", type=Path, required=True)
         if name in ("intake", "refresh"):
@@ -44,6 +44,9 @@ def _parser():
             command.add_argument("--attempt", required=True)
         if name == "export":
             command.add_argument("--out", type=Path, required=True)
+            command.add_argument("--copy-to", type=Path)
+        if name == "accuracy":
+            command.add_argument("--expected", type=Path, required=True)
     return parser
 
 
@@ -105,8 +108,13 @@ def main(argv=None, *, provider_factory=None, hook=None, scheduler_options=None)
             elif args.command == "history":
                 result = repo.history_page(args.document, limit=args.limit, offset=args.offset)
             elif args.command == "export":
-                from .snapshots import export_generation
+                from .snapshots import copy_generation, export_generation
                 result = export_generation(repo, args.out)
+                if args.copy_to is not None:
+                    copy_generation(args.out, args.copy_to, manifest=result)
+            elif args.command == "accuracy":
+                from .accuracy import compare
+                result = compare(repo.snapshot()["extractions"], json.loads(args.expected.read_text(encoding="utf-8")))
             else:
                 if args.command == "intake":
                     paths = batch_paths(p for path in args.paths for p in (sorted(path.glob("*.json")) if path.is_dir() else [path]))

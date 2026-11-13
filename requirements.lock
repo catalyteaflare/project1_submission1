@@ -1,0 +1,5 @@
+# Runtime dependencies: none. This application uses the Python standard library.
+# Supported runtime: CPython 3.11+ on a POSIX host with SQLite, venv, host pip 22.3+.
+# Empty dependency closure: no external packages or build backend to resolve.
+# Install with pip --no-index --require-hashes -r requirements.lock.
+# Python/SQLite are supplied by the host, not installed by this lockfile.
