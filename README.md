@@ -1,6 +1,6 @@
 # IT access-request intake
 
-Prepare a human review queue from exported messages. Validated structured facts
+Prepare a review queue from exported messages. Validated structured facts
 are routed under the Northstar office policy, with durable attempts and source
 revisions in SQLite. The application never grants access or marks approval.
 
@@ -95,8 +95,3 @@ multi-host coordination are unsupported. Leases prevent stale publication;
 uncertain remote calls can repeat after a crash. Mock batches of 400 and 2,000
 verify scheduling/storage, not a production latency, quota, availability or cost
 SLA. Source-override detection is conservative and not exhaustive.
-
-Step 10 submission: commit `91e20ce` and its paired Entire capture were verified
-on the remote default branch, `main`. The repository owner confirmed the
-Classroom submission. See [verification](deliverables/verification.md) for the
-submitted commit and evidence. The walkthrough commands do not submit anything.
