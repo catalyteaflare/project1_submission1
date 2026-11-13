@@ -1,5 +1,0 @@
-{
-  "status": "completed",
-  "refusal": null,
-  "output_text": "{\"request_id\":\"IT-005\",\"request_date\":\"2026-10-22\",\"kind\":\"withdrawal\",\"requester\":\"Ava Brooks\",\"team\":\"Design\",\"system\":null,\"environment\":null,\"permission\":null,\"business_purpose\":\"The project that triggered my request has been cancelled so now there is no work for me to do.\",\"start_date\":null,\"end_date\":null,\"manager\":\"Elena Park\",\"supporting_quotes\":[\"withdraw IT-005? Date: 2026-10-22\",\"My name is Ava Brooks. Design.\",\"My boss is Elena Park.\",\"The project that triggered my request has been cancelled so now there is no work for me to do.\"],\"issues\":[\"Missing system\",\"Missing environment\",\"Missing permission\",\"Missing start_date\",\"Missing end_date\"]}"
-}

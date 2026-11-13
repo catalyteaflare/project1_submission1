@@ -1,9 +1,0 @@
-{
-  "status": 503,
-  "headers": {},
-  "body": {
-    "error": {
-      "message": "unavailable"
-    }
-  }
-}

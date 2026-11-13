@@ -1,5 +1,0 @@
-{
-  "status": "completed",
-  "refusal": null,
-  "output_text": "{\"requester\": null, \"team\": null, \"system\": null, \"environment\": null, \"permission\": null, \"business_purpose\": null, \"start_date\": null, \"end_date\": null, \"manager\": null, \"request_id\": \"IT-903\", \"request_date\": \"2026-10-22\", \"kind\": \"withdrawal\", \"supporting_quotes\": [\"Withdraw IT-903, dated 2026-10-22.\"], \"issues\": [\"Missing requester\", \"Missing team\", \"Missing system\", \"Missing environment\", \"Missing permission\", \"Missing business_purpose\", \"Missing start_date\", \"Missing end_date\", \"Missing manager\"]}"
-}
