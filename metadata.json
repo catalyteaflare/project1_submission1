@@ -1,0 +1,66 @@
+{
+  "cli_version": "0.13.3",
+  "checkpoint_id": "01M7AMXBFP89MMJPW1ZA021QNR",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tests/expected_facts.json",
+    "tests/mock_responses/change-read.json",
+    "tests/mock_responses/change-write.json",
+    "tests/mock_responses/conflicting-environment.json",
+    "tests/mock_responses/conflicting-managers.json",
+    "tests/mock_responses/corrected-dates.json",
+    "tests/mock_responses/corrected-environment.json",
+    "tests/mock_responses/embedded-instructions-unreported.json",
+    "tests/mock_responses/embedded-instructions.json",
+    "tests/mock_responses/identifier-mismatch.json",
+    "tests/mock_responses/long-complete.json",
+    "tests/mock_responses/missing-dates.json",
+    "tests/mock_responses/missing-end.json",
+    "tests/mock_responses/missing-manager.json",
+    "tests/mock_responses/null-kind.json",
+    "tests/mock_responses/other.json",
+    "tests/mock_responses/override-withdrawal.json",
+    "tests/mock_responses/paraphrase.json",
+    "tests/mock_responses/production-read.json",
+    "tests/mock_responses/production-write.json",
+    "tests/mock_responses/quoted-override.json",
+    "tests/mock_responses/relative-dates.json",
+    "tests/mock_responses/reversed-dates.json",
+    "tests/mock_responses/staging-admin.json",
+    "tests/mock_responses/withdrawal-incomplete.json",
+    "tests/mock_responses/withdrawal-missing-date.json",
+    "tests/test_policy.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 16524,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1788160,
+    "output_tokens": 9395,
+    "api_call_count": 8
+  },
+  "redaction": {
+    "replacements": 11,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 6,
+      "credentialed_uri": 0,
+      "entropy": 6,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
