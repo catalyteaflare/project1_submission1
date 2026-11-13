@@ -146,6 +146,27 @@ are verified. Concurrent readers must use the manifest-based snapshot interface;
 it resolves a single generation and verifies both hashes. Interrupted handover
 copies can be regenerated; they are not the application coordination interface.
 
-C01/final submission is unperformed: facilitator capture/commit pairing, remote
-default-branch push and Classroom submission belong to Step 10. Local artifact
-verification does not claim those obligations are complete.
+## C01 / Step 10 submission record
+
+Submitted application commit: `91e20ce0ded0c3b0933155bca5fd1e70d13239ff`.
+GitHub's default branch `main` and remote HEAD were verified at that exact
+commit with `git remote show origin` and `git ls-remote origin`.
+Required application/output files were inspected in the commit and matched
+the clean working tree. The 20-record handover pair matched its manifest hashes.
+
+The commit's `Entire-Checkpoint` trailer identifies
+`01M7AW63AVP5WZJ3TDEABJQ489`. Entire metadata paired that checkpoint with the
+coding session. Its ref, `refs/entire/checkpoints/89/01M7AW63AVP5WZJ3TDEABJQ489`,
+was verified on the remote with the same object as the local capture; the
+capture contains session metadata and transcripts. No capture setup was changed.
+
+The final pre-submission check ran all 44 tests successfully in 36.581 seconds,
+using the same offline mock/fake-transport configuration described above.
+The repository owner subsequently confirmed completing the Classroom
+submission. The instructed submission text was only the root repository URL:
+`https://github.com/catalyteaflare/ai-full-stack-it-access-requests`.
+Classroom completion is owner-confirmed; its receipt and exact submitted text
+were not independently inspected through a Classroom connection.
+
+This documentation update records the submission of the commit above; it does
+not change the identity of the verified submitted application commit.
