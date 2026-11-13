@@ -1,12 +1,13 @@
 """Durable attempts, current results, history, reuse and configuration refresh.
 
-Provider execution happens outside write transactions. This step's service
-executes sequentially; multi-process leases and recovery are step 7.
+Provider execution happens outside write transactions. Atomic claims, finite
+leases and attempt tokens coordinate workers sharing one local SQLite database.
 """
 
 import copy
 import hashlib
 import json
+import math
 import shlex
 import sqlite3
 from contextlib import contextmanager
@@ -78,10 +79,15 @@ class ProcessingSettings:
 
 
 class Repository:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, clock: Callable = time, fault_hook: Callable | None = None,
+                 lock_timeout: float = 5):
+        if not math.isfinite(lock_timeout) or lock_timeout < 0:
+            raise ValueError("Lock timeout must be finite and nonnegative")
         self.path = Path(path).resolve()
+        self.clock = clock
+        self.fault_hook = fault_hook or (lambda stage, identity: None)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.path, timeout=5, isolation_level=None)
+        self.connection = sqlite3.connect(self.path, timeout=lock_timeout, isolation_level=None)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys=ON")
         self.connection.execute("PRAGMA journal_mode=WAL")
@@ -108,10 +114,20 @@ class Repository:
                 work_state TEXT NOT NULL,
                 accepted_at REAL NOT NULL,
                 completed_at REAL,
-                result_json TEXT
+                result_json TEXT,
+                lease_token TEXT,
+                lease_until REAL,
+                recover_from TEXT
             );
             CREATE INDEX IF NOT EXISTS attempt_document ON attempts(document_id, sequence);
         """)
+        # Inspect and upgrade under the same lock so concurrent openers cannot
+        # both attempt the same ALTER TABLE on an existing step-6 database.
+        with self._transaction(write=True):
+            existing = {row["name"] for row in self.connection.execute("PRAGMA table_info(attempts)")}
+            for name, definition in {"lease_token": "TEXT", "lease_until": "REAL", "recover_from": "TEXT"}.items():
+                if name not in existing:
+                    self.connection.execute(f"ALTER TABLE attempts ADD COLUMN {name} {definition}")
 
     def close(self):
         self.connection.close()
@@ -144,6 +160,7 @@ class Repository:
             "document_id": row["document_id"], "attempt_id": row["attempt_id"],
             "revision": row["revision"], "source_sha256": row["source_sha256"],
             "work_state": row["work_state"], "settings": json.loads(row["settings_json"]),
+            "lease_until": row["lease_until"], "recover_from": row["recover_from"],
         }
 
     def saved_attempt(self, attempt_id: str):
@@ -183,18 +200,43 @@ class Repository:
                 source_bytes, settings_json, extraction_fingerprint, kind, parent_attempt_id, work_state, accepted_at)
                 VALUES (?,?,?,?,?,?,?,?,?,'queued',?)""",
                 (attempt_id, document_id, accepted_revision, source_hash, raw, _json(asdict(settings)),
-                 fingerprint, kind, parent_id, time()))
+                 fingerprint, kind, parent_id, self.clock()))
             if document is None or accepted_revision >= document["revision"]:
                 self.connection.execute("UPDATE documents SET revision=?, source_sha256=?, latest_attempt_id=? WHERE document_id=?",
                                         (accepted_revision, source_hash, attempt_id, document_id))
         return attempt_id, None
 
-    def _execute(self, attempt_id, *, provider=None, provider_factory=None, router=route):
+    def enqueue(self, paths: Iterable[Path], *, settings: ProcessingSettings) -> list[str]:
+        """Durably accept a batch before workers execute any of its jobs."""
+        identities = []
+        for path in batch_paths(paths):
+            identity, reused = self._schedule(path.name, path.read_bytes(), settings)
+            identities.append(identity if identity is not None else reused["attempt_id"])
+        return identities
+
+    def claim(self, attempt_id=None, *, lease_seconds=90):
+        """Atomically claim one queued attempt, or return None without a call."""
+        if not math.isfinite(lease_seconds) or lease_seconds <= 0:
+            raise ValueError("Lease duration must be finite and positive")
         with self._transaction(write=True):
-            job = self._attempt(attempt_id)
-            if job["work_state"] != "queued":
-                raise ValueError("Only queued work can execute")
-            self.connection.execute("UPDATE attempts SET work_state='running' WHERE attempt_id=?", (attempt_id,))
+            query = "SELECT * FROM attempts WHERE work_state='queued'"
+            parameters = []
+            if attempt_id is not None:
+                query += " AND attempt_id=?"
+                parameters.append(attempt_id)
+            job = self.connection.execute(query + " ORDER BY sequence LIMIT 1", parameters).fetchone()
+            if job is None:
+                return None
+            token = uuid4().hex
+            self.connection.execute("UPDATE attempts SET work_state='running', lease_token=?, lease_until=? WHERE attempt_id=?",
+                                    (token, self.clock() + lease_seconds, job["attempt_id"]))
+            claimed = dict(self._attempt(job["attempt_id"]))
+        self.fault_hook("after_claim", claimed["attempt_id"])
+        return claimed
+
+    def compute(self, job, *, provider=None, provider_factory=None, router=route):
+        """Compute outside a write transaction; publication still needs the token."""
+        attempt_id = job["attempt_id"]
         settings = ProcessingSettings(**json.loads(job["settings_json"]))
         parent = None
         try:
@@ -230,13 +272,71 @@ class Repository:
                                            attempt_id if result["extraction"] is not None else None)
         if result["error"]:
             result["retry_command"] = f"python3 -m access_intake retry --attempt {attempt_id} --state {shlex.quote(str(self.path))}"
-        # Attempt completion/history and current-result publication share a commit.
-        with self._transaction(write=True):
-            self.connection.execute("UPDATE attempts SET work_state='completed', completed_at=?, result_json=? WHERE attempt_id=?",
-                                    (time(), _json(result), attempt_id))
-            self.connection.execute("UPDATE documents SET current_attempt_id=? WHERE document_id=? AND latest_attempt_id=?",
-                                    (attempt_id, job["document_id"], attempt_id))
+        result["recover_from"] = job["recover_from"]
+        self.fault_hook("after_response", attempt_id)
         return result
+
+    def _recover_locked(self, now):
+        """Clone expired work and replace only its own latest pointer atomically."""
+        expired = self.connection.execute("""SELECT * FROM attempts WHERE work_state='running'
+            AND (lease_until IS NULL OR lease_until<=?) ORDER BY sequence""", (now,)).fetchall()
+        replacements = []
+        for job in expired:
+            identity = uuid4().hex
+            self.connection.execute("UPDATE attempts SET work_state='interrupted' WHERE attempt_id=?", (job["attempt_id"],))
+            self.connection.execute("""INSERT INTO attempts(attempt_id, document_id, revision, source_sha256,
+                source_bytes, settings_json, extraction_fingerprint, kind, parent_attempt_id, work_state,
+                accepted_at, recover_from) VALUES (?,?,?,?,?,?,?,?,?,'queued',?,?)""",
+                (identity, job["document_id"], job["revision"], job["source_sha256"], job["source_bytes"],
+                 job["settings_json"], job["extraction_fingerprint"], job["kind"], job["parent_attempt_id"], now, job["attempt_id"]))
+            self.connection.execute("UPDATE documents SET latest_attempt_id=? WHERE latest_attempt_id=?",
+                                    (identity, job["attempt_id"]))
+            replacements.append(identity)
+        return replacements
+
+    def recover(self, *, now=None) -> list[str]:
+        """Replace expired claims with queued attempts using their saved inputs."""
+        with self._transaction(write=True):
+            return self._recover_locked(self.clock() if now is None else now)
+
+    def finish(self, job, result):
+        """Retain late completions in history while fencing current publication."""
+        with self._transaction(write=True):
+            actual = self._attempt(job["attempt_id"])
+            if (not job.get("lease_token") or actual["lease_token"] != job["lease_token"]
+                    or actual["work_state"] not in ("running", "interrupted")
+                    or actual["result_json"] is not None):
+                raise ValueError("Worker token is invalid or this attempt is already completed")
+            for field in ("attempt_id", "document_id", "source_sha256", "revision"):
+                if result.get(field) != actual[field]:
+                    raise ValueError("Result identity differs from the claimed source attempt")
+            now = self.clock()
+            # An expired worker cannot publish even when no other operator has
+            # invoked recovery yet. Its replacement and history commit together.
+            self._recover_locked(now)
+            current_job = self._attempt(job["attempt_id"])
+            publish = current_job["work_state"] == "running" and current_job["lease_until"] > now
+            self.connection.execute("UPDATE attempts SET work_state='completed', completed_at=?, result_json=? WHERE attempt_id=?",
+                                    (now, _json(result), job["attempt_id"]))
+            if publish:
+                self.connection.execute("UPDATE documents SET current_attempt_id=? WHERE document_id=? AND latest_attempt_id=?",
+                                        (job["attempt_id"], actual["document_id"], job["attempt_id"]))
+        self.fault_hook("after_commit", job["attempt_id"])
+        return result
+
+    def run_one(self, attempt_id=None, *, provider=None, provider_factory=None, router=route, lease_seconds=90):
+        job = self.claim(attempt_id, lease_seconds=lease_seconds)
+        if job is None:
+            return None
+        result = self.compute(job, provider=provider, provider_factory=provider_factory, router=router)
+        return self.finish(job, result)
+
+    def _execute(self, attempt_id, **kwargs):
+        result = self.run_one(attempt_id, **kwargs)
+        if result is not None:
+            return result
+        saved = self._attempt(attempt_id)
+        return json.loads(saved["result_json"]) if saved["result_json"] else self._pending(saved)
 
     def intake(self, paths: Iterable[Path], *, provider: Provider, settings: ProcessingSettings):
         settings.check_provider(provider)

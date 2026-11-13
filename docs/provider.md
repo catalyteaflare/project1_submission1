@@ -88,8 +88,8 @@ configured credential in its payload.
 revision and settings are committed with queued work before provider execution.
 Running work is visible to another connection, and a provider call holds no
 database write lock. SQLite uses WAL, full synchronous commits and a bounded
-five-second lock wait. This step's service executes sequentially; multi-process
-claims, leases and crash recovery remain for step 7.
+five-second lock wait by default. Step 7 adds the coordinated worker-service
+operations below; each process opens its own repository connection.
 
 The service methods are:
 
@@ -129,6 +129,66 @@ an in-memory mapping and use only a fake HTTP transport.
 Repository errors include the saved attempt ID and the actual, shell-quoted
 state path in their retry descriptions. The operator CLI is still step 8.
 
+## Shared workers and recovery (step 7)
+
+The supported shared deployment is one host using one local SQLite database.
+Use a separate `Repository` connection per process. Network filesystems and
+independent regional databases are outside this design. The constructor accepts
+`lock_timeout` in seconds (default 5), a clock and an optional fault hook.
+
+| Worker-service method | Behavior |
+| --- | --- |
+| `enqueue(paths, settings=...)` | Save source/settings and return attempt IDs; identical pending/terminal work reuses its identity |
+| `claim(attempt_id=None, lease_seconds=90)` | Atomically take queued work; return a claim with an opaque lease token, or `None` when unavailable |
+| `compute(claim, provider=..., provider_factory=..., router=...)` | Produce a validated/routed result outside database write transactions |
+| `finish(claim, result)` | Check the token and source identity, commit history, and publish only an eligible latest attempt |
+| `run_one(attempt_id=None, provider=..., provider_factory=..., lease_seconds=90)` | Claim, compute and finish one available job; completed work is not called again |
+| `recover(now=None)` | Atomically mark expired running attempts interrupted and create queued replacements from their saved inputs |
+
+Lease durations must be positive and finite; lock waits must be finite and
+nonnegative. Recovery replaces only the expired attempt's own latest pointer.
+It preserves its revision, source bytes, settings, and links the replacement
+through `recover_from`. Repeating recovery cannot clone the same lease twice.
+Older schemas are upgraded under a write lock; unfinished legacy work without a
+lease is recoverable as expired work.
+
+A wrong token or repeated completion is rejected. An expired worker can still
+record its late result as history, but cannot publish it as current. Expiry is
+checked inside completion's write transaction, even before another operator
+explicitly calls recovery. A late result also cannot replace a newer accepted
+source or that source's latest error. Revision order follows durable intake
+acceptance, independent of export timestamps or completion order.
+
+`progress()` returns persisted work states. An expired lease remains stored as
+`running` until recovery changes it to `interrupted`. `lease_until` identifies its
+expiry. Work state stays separate from the policy status of completed results.
+CLI presentation of pending and stale work belongs to step 8.
+
+A crash after a remote call but before result commit can cause a repeated call
+on recovery. The system prevents stale or duplicate current publication; it
+does not claim exactly-once remote execution. Completed attempts remain committed
+and are not reprocessed by recovery. Leases expire publication authority; total
+attempt deadlines, bounded concurrency and automatic backoff are step 8.
+
+## Consistent export generations (step 7)
+
+`export_generation(repository, directory)` writes `extractions.jsonl` and
+`queue.json` into a new immutable generation from one database snapshot. It
+flushes/fsyncs both files and their directory before atomically replacing
+`manifest.json`. The manifest identifies the generation and both SHA-256 hashes.
+
+`read_snapshot(directory)` resolves the manifest once and verifies both files
+from that same generation. A publication between its two file reads cannot
+mix generations. A crash before manifest replacement leaves the old pair active;
+a crash after replacement leaves the new pair active. Unreferenced generations
+are ignored and retained, so active readers can finish using older generations.
+
+Publication uses POSIX file/directory fsync and atomic replacement on a local
+filesystem. Tests exercise controlled process crashes, not power loss or
+multi-host storage. The fault hooks cover `after_claim`, `after_response`,
+`after_commit`, `after_generation`, `after_manifest`, and
+`after_extractions_read`. They are injected by tests; normal calls use no hook.
+
 ## Reproducible evidence and verification
 
 From the repository root:
@@ -158,3 +218,11 @@ failures, current/history provenance and extraction versus policy refresh.
 Their HTTP-binding subcase verifies that saved prompt/schema/request changes
 reach the real adapter through a fake transport. Synthetic routing changes in
 T35 are labeled test-only; they do not change the supplied office policy.
+
+T36–T38 use saved replies with separate POSIX worker processes, event barriers,
+shared logical clocks and fault injection. They verify overlapping claims and an
+unaffected peer, expiry/replacement, wrong-token and repeated-completion rejection,
+a configured zero lock wait, recovery around commit boundaries, snapshot crash
+boundaries, publication between reader file reads, and reversed completion with
+both newer success and newer failure. No model/key access is used. These process
+tests are skipped on platforms without POSIX fork; the other unit tests still run.
