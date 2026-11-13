@@ -52,6 +52,8 @@ class MockProvider:
     fresh envelope so a caller's changes cannot affect a later reply.
     """
 
+    response_source = "mock"
+
     def __init__(
         self,
         outcomes: Iterable[MockOutcome],

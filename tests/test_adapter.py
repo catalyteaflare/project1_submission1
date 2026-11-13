@@ -12,6 +12,7 @@ import logging
 import os
 import socket
 import unittest
+from contextlib import ExitStack
 from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -149,12 +150,13 @@ class AdapterContract(unittest.TestCase):
 
         def load_adapter(transport, **overrides):
             # Populate a completely isolated environment before permitting reads.
-            with patch.dict(os.environ, {**environment, **overrides}, clear=True):
+            with ExitStack() as isolation:
+                # patch.dict cleanup also reads its dummy value. Keep the guard
+                # exception active until that isolated environment is removed.
+                isolation.callback(setattr, self, "allow_dummy_key", False)
+                isolation.enter_context(patch.dict(os.environ, {**environment, **overrides}, clear=True))
                 self.allow_dummy_key = True
-                try:
-                    return HttpProvider.from_environment(transport=transport)
-                finally:
-                    self.allow_dummy_key = False
+                return HttpProvider.from_environment(transport=transport)
 
         log = io.StringIO()
         handler = logging.StreamHandler(log)

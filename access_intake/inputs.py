@@ -57,14 +57,20 @@ def decode_export(path: Path, raw: bytes) -> SourceDocument:
     )
 
 
-def process_exports(paths: Iterable[Path], *, provider: Provider) -> list[InputResult]:
-    """Reject duplicate basenames before calls; isolate malformed input errors."""
+def batch_paths(paths: Iterable[Path]) -> list[Path]:
+    """Check the whole batch for ambiguous filename identities before work."""
     batch = [Path(path) for path in paths]
     seen: set[str] = set()
     for path in batch:
         if path.name in seen:
             raise InputError(f"Duplicate basename {path.name}; use distinct filenames in a batch")
         seen.add(path.name)
+    return batch
+
+
+def process_exports(paths: Iterable[Path], *, provider: Provider) -> list[InputResult]:
+    """Reject duplicate basenames before calls; isolate malformed input errors."""
+    batch = batch_paths(paths)
 
     results = []
     for path in batch:
