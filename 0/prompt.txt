@@ -1,0 +1,30 @@
+Can you use the $plan-from-spec skill on planning/spec.md? Write no code and no tests yet, only planning/plan.md should be modified
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"No, these are open questions. If the main files don't mention a solution or expected behavior, use the simplest scenario that still supports production operations","question":"The spec leaves several operating rules open. Do you have decisions for OQ-01–OQ-10, particularly revision ordering, shared-host versus regional operation, retry behavior and validation failures? I’ll mark unresolved rules as decision gates in the plan so they aren’t silently assumed.","questionItemId":"[\"request_user_input_async\",\"call_e1298b40019d4c7482da1c21f3a2abbe\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+Can you reread planning/plan.md with me, and point out if a spec line does not appear in in § Coverage with a step that builds it and a test or check that shows
+     it? If a spec line has been left out, it needs to go back in
+
+---
+
+Thank you! Can you read planning/plan.md again to make sure these requirements are satisifed:    - The test plan has its own row for each case of `docs/requirements.md` § Verification: a
+     complete request, missing dates, conflicting details, embedded instructions, provider failure,
+     an unchanged rerun, changed source content. Then the paraphrased request you author, a refusal
+     or interrupted response, and a failed retry after a prior success.
+   - Each row's input is a real export in `materials/requests/`, and you
+     opened it and read the message.
+
+---
+
+Thank you! Could we read through planning/plan.md again, and make sure that 1.Each expected fact quotes the message words and the policy rule it comes from. 2. Each row's mock response is named: a saved reply under `tests/mock_responses/`, an error, or a
+     cut-off reply. No test calls the real model, and none needs `API_KEY`. and 3.The steps put the mock provider first, and each later step names the test written before it.
+
+---
+
+\quit
