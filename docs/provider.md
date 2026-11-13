@@ -45,8 +45,9 @@ business facts. No tool calls are requested.
 
 The transport sends one request, applies the configured socket timeout, caps the
 response bytes, and refuses redirects. The adapter also enforces the byte cap on
-injected transports. The timeout bounds socket operations; a hard total-attempt
-deadline and bounded automatic retry scheduling belong to step 8.
+injected transports. The timeout bounds socket operations; the operator scheduler
+enforces a hard total-attempt deadline and bounded automatic retries. See
+[operator.md](operator.md) for commands and scheduling limits.
 
 A response must be UTF-8 JSON with exactly one completion choice, an assistant
 message, a recognized finish reason and a producing model ID. Refusal takes
@@ -57,7 +58,7 @@ dates, field-specific null issues and exact source quotes before routing.
 
 HTTP 429/5xx and transport failures carry transient-retry metadata. A timeout has
 the distinct `provider-timeout` code. A valid Retry-After number or HTTP date is
-parsed; the later scheduler will apply the configured cap and backoff. Other
+parsed; the operator scheduler applies the cap and backoff. Other
 HTTP errors, oversized responses, malformed envelopes, refusals, incompletion
 and invalid extraction data are terminal for that attempt. The adapter itself
 does not retry or repair output.
@@ -71,9 +72,9 @@ saved bytes through an injectable retry handler, even if the source path changes
 Earlier attempts remain identified by their own attempt IDs.
 
 Error records have a null extraction, IT Service Desk ownership and a retry
-description. The `STATE` placeholder in the in-memory service's retry command is
-a state location to be supplied. `Repository` provides durable retries as
-described below. Executable operator CLI retry commands are step 8.
+description. The `STATE` placeholder in the in-memory test harness describes the
+command form. `Repository` provides durable attempts and generates executable
+CLI retry commands with their actual state paths, as described below.
 
 Provider error bodies and original transport diagnostics are excluded from
 operational records. Controlled diagnostics and credential redaction prevent a
@@ -127,7 +128,7 @@ and credential fields are rejected. Tests inject the dummy credential through
 an in-memory mapping and use only a fake HTTP transport.
 
 Repository errors include the saved attempt ID and the actual, shell-quoted
-state path in their retry descriptions. The operator CLI is still step 8.
+state path in their executable retry commands. Commands are in [operator.md](operator.md).
 
 ## Shared workers and recovery (step 7)
 
@@ -162,13 +163,16 @@ acceptance, independent of export timestamps or completion order.
 `progress()` returns persisted work states. An expired lease remains stored as
 `running` until recovery changes it to `interrupted`. `lease_until` identifies its
 expiry. Work state stays separate from the policy status of completed results.
-CLI presentation of pending and stale work belongs to step 8.
+CLI progress derives expiry labels separately and keeps its counts consistent
+with those labels. Queue rows retain their completed source/attempt identity and
+are marked stale when newer work is pending.
 
 A crash after a remote call but before result commit can cause a repeated call
 on recovery. The system prevents stale or duplicate current publication; it
 does not claim exactly-once remote execution. Completed attempts remain committed
-and are not reprocessed by recovery. Leases expire publication authority; total
-attempt deadlines, bounded concurrency and automatic backoff are step 8.
+and are not reprocessed by recovery. Leases expire publication authority. The
+operator scheduler enforces total deadlines, bounded concurrency and automatic
+backoff, with retry-wait budgets retained across restarts.
 
 ## Consistent export generations (step 7)
 

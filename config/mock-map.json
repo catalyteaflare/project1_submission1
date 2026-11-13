@@ -1,0 +1,65 @@
+{
+  "15b32a4416b0afed1d9245246465e7fc6fb30c69f37894641c79ef15ebe6972a": {
+    "response": "../tests/mock_responses/production-read.json"
+  },
+  "1d1266ae2531ddde6730683c8d0075d2d504e8497f3e46262973c4e54aa8e8fe": {
+    "response": "../tests/mock_responses/corrected-environment.json"
+  },
+  "25916f882dc538fff0943fc9c222a86f9e410058af1ad62fda63cfd15bdc8b56": {
+    "response": "../tests/mock_responses/missing-manager.json"
+  },
+  "56ec137b7e5437280cc8398785e8e2d2097a988fa07da87963a9e88541546206": {
+    "response": "../tests/mock_responses/other.json"
+  },
+  "5c920c315fce34e00e30a7bcbef0fe174fd7b5d9a711ab6584d755d6f9ca7080": {
+    "response": "../tests/mock_responses/long-complete.json"
+  },
+  "60dcc8335101e418ff889beafa64b2dece081209823c4cdc81048982e240cec0": {
+    "response": "../tests/mock_responses/staging-admin.json"
+  },
+  "63ef885822b038568e1b531762a3482bf90742f62b019854fa03005b57cd0adb": {
+    "response": "../tests/mock_responses/embedded-instructions.json"
+  },
+  "6675a5d981f13b34cc9a796235a1b2c6e87cab7e53f1b950efc961e146e6cb2b": {
+    "response": "../tests/mock_responses/missing-dates.json"
+  },
+  "68ee56690b0c4c4d3d97700aed1d15f7c5181498af9bf998691d925328ecefe6": {
+    "response": "../tests/mock_responses/paraphrase.json"
+  },
+  "72bda8c5b80b678289aa0e089081aed83ae16ea115d105f141b316a841dad98c": {
+    "response": "../tests/mock_responses/complete.json"
+  },
+  "8121a366488c0154e9f4f4041d386fafe7ac1f5b9a325c67dccf3fbe29d0fabc": {
+    "response": "../tests/mock_responses/corrected-dates.json"
+  },
+  "9c5cc7dd21553d513388522e8d87efa028c0ddba6f066ee7b87fce26acfae98b": {
+    "response": "../tests/mock_responses/withdrawal.json"
+  },
+  "a04c46cca01ea61f9ce229bf479a1355ce73c29f67c9cab11a8f1d5525133c5b": {
+    "response": "../tests/mock_responses/change-read.json"
+  },
+  "a1379aae049e055ecf472e31c9cda46726e0f64bef3b1f051c4b55b773ef88e9": {
+    "response": "../tests/mock_responses/change-write.json"
+  },
+  "ad2686d95f9d7d362c6dcec8cdd0f28b6774afce19c61aad1eee45964f65c623": {
+    "response": "../tests/mock_responses/conflicting-managers.json"
+  },
+  "b9eb990679c8ad18b53815ebc148517ab11029a69a3ebcbc72f078d8b596e58a": {
+    "response": "../tests/mock_responses/relative-dates.json"
+  },
+  "c42006c3022f149adbc73c66211b857730dcccdfe0e5edfb317522b5c571817f": {
+    "response": "../tests/mock_responses/production-write.json"
+  },
+  "dc0cfe0de399564c5b46344abfb9f517715803a63c581ae649957584ce2e7bcc": {
+    "response": "../tests/mock_responses/identifier-mismatch.json"
+  },
+  "e5a783cbc6a2f4ff0990b0f27d770ce8a6229e4442248f7a0e28b8059ebfd780": {
+    "response": "../tests/mock_responses/conflicting-environment.json"
+  },
+  "ed0f62a54add5f86112ce8b0c2f450a026eb4c855e7c6f18e126f2f388194cfa": {
+    "response": "../tests/mock_responses/reversed-dates.json"
+  },
+  "f761b59c9e2a81525ccbf06e674035364e39cc6553414ac7221661b6bc5ca5d7": {
+    "response": "../tests/mock_responses/missing-end.json"
+  }
+}

@@ -117,7 +117,11 @@ class Repository:
                 result_json TEXT,
                 lease_token TEXT,
                 lease_until REAL,
-                recover_from TEXT
+                recover_from TEXT,
+                call_count INTEGER NOT NULL DEFAULT 0,
+                next_run_at REAL NOT NULL DEFAULT 0,
+                deadline REAL,
+                last_error_code TEXT
             );
             CREATE INDEX IF NOT EXISTS attempt_document ON attempts(document_id, sequence);
         """)
@@ -125,9 +129,13 @@ class Repository:
         # both attempt the same ALTER TABLE on an existing step-6 database.
         with self._transaction(write=True):
             existing = {row["name"] for row in self.connection.execute("PRAGMA table_info(attempts)")}
-            for name, definition in {"lease_token": "TEXT", "lease_until": "REAL", "recover_from": "TEXT"}.items():
+            columns = {"lease_token": "TEXT", "lease_until": "REAL", "recover_from": "TEXT",
+                       "call_count": "INTEGER NOT NULL DEFAULT 0", "next_run_at": "REAL NOT NULL DEFAULT 0",
+                       "deadline": "REAL", "last_error_code": "TEXT"}
+            for name, definition in columns.items():
                 if name not in existing:
                     self.connection.execute(f"ALTER TABLE attempts ADD COLUMN {name} {definition}")
+            self.connection.execute("CREATE INDEX IF NOT EXISTS attempt_ready ON attempts(work_state, next_run_at, sequence)")
 
     def close(self):
         self.connection.close()
@@ -161,19 +169,26 @@ class Repository:
             "revision": row["revision"], "source_sha256": row["source_sha256"],
             "work_state": row["work_state"], "settings": json.loads(row["settings_json"]),
             "lease_until": row["lease_until"], "recover_from": row["recover_from"],
+            "call_count": row["call_count"], "next_run_at": row["next_run_at"],
+            "deadline": row["deadline"], "last_error_code": row["last_error_code"],
         }
 
     def saved_attempt(self, attempt_id: str):
         row = self._attempt(attempt_id)
         return {**self._pending(row), "source_bytes": row["source_bytes"]}
 
-    def _schedule(self, document_id, raw, settings, *, force=False, revision=None):
+    def _schedule(self, document_id, raw, settings, *, force=False, revision=None, expected_latest=None):
         # Freeze nested dictionaries before computing or saving their identity.
         settings = ProcessingSettings(**json.loads(_json(asdict(settings))))
         source_hash = hashlib.sha256(raw).hexdigest()
         fingerprint = settings.extraction_fingerprint(raw)
         with self._transaction(write=True):
             document = self.connection.execute("SELECT * FROM documents WHERE document_id=?", (document_id,)).fetchone()
+            if expected_latest is not None and (document is None or document["latest_attempt_id"] != expected_latest):
+                if document is None:
+                    return None, None
+                latest = self._attempt(document["latest_attempt_id"])
+                return None, json.loads(latest["result_json"]) if latest["result_json"] else self._pending(latest)
             if document is None:
                 accepted_revision = 1
                 self.connection.execute("INSERT INTO documents(document_id, revision, source_sha256) VALUES (?,?,?)",
@@ -206,6 +221,14 @@ class Repository:
                                         (accepted_revision, source_hash, attempt_id, document_id))
         return attempt_id, None
 
+    def schedule_source(self, document_id, raw, *, settings, expected_latest=None):
+        return self._schedule(document_id, raw, settings, expected_latest=expected_latest)[0]
+
+    def latest_inputs(self, *, after_document="", limit=100):
+        rows = self.connection.execute("""SELECT a.* FROM documents d JOIN attempts a ON a.attempt_id=d.latest_attempt_id
+            WHERE d.document_id>? ORDER BY d.document_id LIMIT ?""", (after_document, limit)).fetchall()
+        return [{**self._pending(row), "source_bytes": row["source_bytes"]} for row in rows]
+
     def enqueue(self, paths: Iterable[Path], *, settings: ProcessingSettings) -> list[str]:
         """Durably accept a batch before workers execute any of its jobs."""
         identities = []
@@ -219,8 +242,9 @@ class Repository:
         if not math.isfinite(lease_seconds) or lease_seconds <= 0:
             raise ValueError("Lease duration must be finite and positive")
         with self._transaction(write=True):
-            query = "SELECT * FROM attempts WHERE work_state='queued'"
-            parameters = []
+            now = self.clock()
+            query = "SELECT * FROM attempts WHERE work_state IN ('queued','retry-wait') AND next_run_at<=?"
+            parameters = [now]
             if attempt_id is not None:
                 query += " AND attempt_id=?"
                 parameters.append(attempt_id)
@@ -229,12 +253,45 @@ class Repository:
                 return None
             token = uuid4().hex
             self.connection.execute("UPDATE attempts SET work_state='running', lease_token=?, lease_until=? WHERE attempt_id=?",
-                                    (token, self.clock() + lease_seconds, job["attempt_id"]))
+                                    (token, now + lease_seconds, job["attempt_id"]))
             claimed = dict(self._attempt(job["attempt_id"]))
+            claimed["claimed_at"] = now
         self.fault_hook("after_claim", claimed["attempt_id"])
         return claimed
 
-    def compute(self, job, *, provider=None, provider_factory=None, router=route):
+    def prepare_execution(self, job, *, timeout, call_provider=True):
+        """Retain the first deadline across backoff and count scheduled calls."""
+        with self._transaction(write=True):
+            actual = self._attempt(job["attempt_id"])
+            if actual["lease_token"] != job["lease_token"] or actual["work_state"] != "running":
+                raise ValueError("Stale worker cannot start a provider call")
+            now = self.clock()
+            deadline = actual["deadline"] if actual["deadline"] is not None else job["claimed_at"] + timeout
+            increment = int(call_provider and now < deadline)
+            self.connection.execute("""UPDATE attempts SET deadline=?, call_count=call_count+?, lease_until=?
+                WHERE attempt_id=?""", (deadline, increment, max(now + 5, deadline + 5), job["attempt_id"]))
+            return dict(self._attempt(job["attempt_id"]))
+
+    def defer(self, job, *, seconds, code):
+        """Release worker ownership while retaining deadline and call budget."""
+        with self._transaction(write=True):
+            updated = self.connection.execute("""UPDATE attempts SET work_state='retry-wait', next_run_at=?,
+                last_error_code=?, lease_token=NULL, lease_until=NULL WHERE attempt_id=? AND lease_token=?
+                AND work_state='running' AND lease_until>?""",
+                (self.clock() + seconds, code, job["attempt_id"], job["lease_token"], self.clock()))
+            return updated.rowcount == 1
+
+    def interrupt(self, job):
+        """Expire only this invocation's active claim; recovery makes replacements."""
+        with self._transaction(write=True):
+            self.connection.execute("UPDATE attempts SET lease_until=0 WHERE attempt_id=? AND lease_token=? AND work_state='running'",
+                                    (job["attempt_id"], job["lease_token"]))
+
+    def next_ready_at(self):
+        return self.connection.execute("SELECT min(next_run_at) FROM attempts WHERE work_state IN ('queued','retry-wait')").fetchone()[0]
+
+    def compute(self, job, *, provider=None, provider_factory=None, router=route,
+                raise_provider_errors=False, call_recorded=False):
         """Compute outside a write transaction; publication still needs the token."""
         attempt_id = job["attempt_id"]
         settings = ProcessingSettings(**json.loads(job["settings_json"]))
@@ -259,7 +316,22 @@ class Repository:
                     origin = "mock" if settings.provider == "mock" else f"{settings.provider}/{settings.model}"
                     result = error_record("provider-configuration", "Cannot construct the saved provider configuration; inspect settings and retry", origin)
                 else:
-                    result = process_source(document, provider)
+                    if not call_recorded:
+                        with self._transaction(write=True):
+                            changed = self.connection.execute("""UPDATE attempts SET call_count=call_count+1
+                                WHERE attempt_id=? AND lease_token=? AND work_state='running'""",
+                                (attempt_id, job["lease_token"]))
+                            if changed.rowcount != 1:
+                                raise ValueError("Stale worker cannot execute a provider call")
+                            job = dict(self._attempt(attempt_id))
+                    result = process_source(document, provider, raise_provider_errors=raise_provider_errors)
+        result = self.decorate(job, result, parent=parent)
+        self.fault_hook("after_response", attempt_id)
+        return result
+
+    def decorate(self, job, result, *, parent=None):
+        attempt_id = job["attempt_id"]
+        settings = ProcessingSettings(**json.loads(job["settings_json"]))
         result.update(
             document_id=job["document_id"], source_sha256=job["source_sha256"],
             attempt_id=attempt_id, revision=job["revision"], settings=asdict(settings),
@@ -273,7 +345,7 @@ class Repository:
         if result["error"]:
             result["retry_command"] = f"python3 -m access_intake retry --attempt {attempt_id} --state {shlex.quote(str(self.path))}"
         result["recover_from"] = job["recover_from"]
-        self.fault_hook("after_response", attempt_id)
+        result["call_count"] = job["call_count"]
         return result
 
     def _recover_locked(self, now):
@@ -347,18 +419,23 @@ class Repository:
         return results
 
     def retry(self, attempt_id: str, *, provider_factory: Callable):
+        new_id = self.enqueue_retry(attempt_id)
+        return self._execute(new_id, provider_factory=provider_factory)
+
+    def enqueue_retry(self, attempt_id: str):
         saved = self._attempt(attempt_id)
         settings = ProcessingSettings(**json.loads(saved["settings_json"]))
         new_id, _ = self._schedule(saved["document_id"], saved["source_bytes"], settings,
                                    force=True, revision=saved["revision"])
-        return self._execute(new_id, provider_factory=provider_factory)
+        return new_id
 
     def refresh(self, *, settings: ProcessingSettings, provider_factory: Callable, router: Callable = route):
         rows = self.connection.execute("""SELECT a.* FROM documents d JOIN attempts a
             ON a.attempt_id=d.latest_attempt_id ORDER BY d.document_id""").fetchall()
         results = []
         for saved in rows:
-            attempt_id, _ = self._schedule(saved["document_id"], saved["source_bytes"], settings)
+            attempt_id, _ = self._schedule(saved["document_id"], saved["source_bytes"], settings,
+                                            expected_latest=saved["attempt_id"])
             if attempt_id is not None:
                 results.append(self._execute(attempt_id, provider_factory=provider_factory, router=router))
         return results
@@ -387,3 +464,47 @@ class Repository:
         """Persisted work states; unfinished attempts never masquerade as results."""
         rows = self.connection.execute("SELECT * FROM attempts ORDER BY sequence").fetchall()
         return [self._pending(row) for row in rows]
+
+    def history_page(self, document_id, *, limit=100, offset=0):
+        with self._transaction():
+            total = self.connection.execute("SELECT count(*) FROM attempts WHERE document_id=? AND result_json IS NOT NULL", (document_id,)).fetchone()[0]
+            rows = self.connection.execute("""SELECT result_json FROM attempts WHERE document_id=? AND result_json IS NOT NULL
+                ORDER BY sequence LIMIT ? OFFSET ?""", (document_id, limit, offset)).fetchall()
+        return {"total": total, "items": [json.loads(row["result_json"]) for row in rows]}
+
+    def queue_page(self, *, limit=100, offset=0):
+        with self._transaction():
+            total = self.connection.execute("SELECT count(*) FROM documents WHERE current_attempt_id IS NOT NULL").fetchone()[0]
+            rows = self.connection.execute("""SELECT a.result_json, d.latest_attempt_id FROM documents d JOIN attempts a
+                ON a.attempt_id=d.current_attempt_id ORDER BY d.document_id LIMIT ? OFFSET ?""", (limit, offset)).fetchall()
+            items = []
+            for row in rows:
+                record = json.loads(row["result_json"])
+                for key in ("extraction", "settings", "extraction_settings"):
+                    record.pop(key, None)
+                record["stale"] = record["attempt_id"] != row["latest_attempt_id"]
+                items.append(record)
+        return {"total": total, "items": items}
+
+    def progress_page(self, *, limit=100, offset=0):
+        """Derive CLI expiry labels without changing persisted work states."""
+        with self._transaction():
+            now = self.clock()
+            total = self.connection.execute("SELECT count(*) FROM documents").fetchone()[0]
+            rows = self.connection.execute("""SELECT a.* FROM documents d JOIN attempts a
+                ON a.attempt_id=d.latest_attempt_id ORDER BY d.document_id LIMIT ? OFFSET ?""", (limit, offset)).fetchall()
+            counts = dict.fromkeys(("queued", "running", "retry-wait", "interrupted", "completed"), 0)
+            counts.update({row[0]: row[1] for row in self.connection.execute("""SELECT CASE
+                WHEN a.work_state='running' AND (a.lease_until IS NULL OR a.lease_until<=?) THEN 'interrupted'
+                ELSE a.work_state END AS display_state, count(*) FROM documents d JOIN attempts a
+                ON a.attempt_id=d.latest_attempt_id GROUP BY display_state""", (now,))})
+            counts["failures"] = self.connection.execute("""SELECT count(*) FROM documents d JOIN attempts a
+                ON a.attempt_id=d.latest_attempt_id WHERE json_extract(a.result_json,'$.status')='error'""").fetchone()[0]
+            counts["backlog"] = total - counts["completed"]
+            items = []
+            for row in rows:
+                item = self._pending(row)
+                if row["work_state"] == "running" and (row["lease_until"] is None or row["lease_until"] <= now):
+                    item["work_state"] = "interrupted"
+                items.append(item)
+        return {"total": total, "items": items, "counts": counts}

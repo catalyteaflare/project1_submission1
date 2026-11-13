@@ -18,10 +18,12 @@ def record_response(document_id: str, source_sha256: str, message: str, envelope
     return {"document_id": document_id, "source_sha256": source_sha256, **result}
 
 
-def process_source(document: SourceDocument, provider: Provider) -> dict[str, Any]:
+def process_source(document: SourceDocument, provider: Provider, *, raise_provider_errors=False) -> dict[str, Any]:
     try:
         envelope = provider.extract(document.message)
     except (ProviderUnavailable, TimeoutError) as error:
+        if raise_provider_errors:
+            raise
         default_code = "provider-timeout" if isinstance(error, TimeoutError) else "provider-unavailable"
         # Original transport diagnostics may contain credentials or request data.
         result = error_record(
@@ -36,8 +38,8 @@ def process_source(document: SourceDocument, provider: Provider) -> dict[str, An
 class IntakeService:
     """Isolated per-document calls and injected retries using saved source bytes.
 
-    Sources here live in memory. Durable attempts belong to step 6; the retry
-    command is a description for the later operator CLI, not an executable yet.
+    Sources here live in memory, and its retry command is a description. The
+    repository supplies durable attempts and executable saved-attempt retries.
     """
 
     def __init__(self, *, provider: Provider, retry_handler: Callable = process_source):
