@@ -1,0 +1,25 @@
+I'd like to reason through some of the decision points. On this challenge, I'd like to determine what the best model is. Can you describe what each model is best capable of?
+
+---
+
+Thank you!
+
+---
+
+I would like to read through the following files below together, and make sure the planning/spec.md matches the program requirements
+
+---
+
+I'd like to hone in on the scope. We need to clean up the submission obligations, as they are not part of the program requirements. Can you list all of the submission-related requirements for me to review?
+
+---
+
+Let's start cleaning these up one by one. For R-87, 88, and 89, I'd like to keep them as the README, source artifacts, and the dependency lockfile are important to the usability of the overal program. However, on the R-90, is "jsonl" a misspelling? It's supposed to be JSON
+
+---
+
+Okay, let's keep R-90 through R-95 as is. For R-96 can we remove this from the program requirements, as it is simply a setup step?
+
+---
+
+Let's also clean up R-97 and 100. This is all part of the overall project development strategy

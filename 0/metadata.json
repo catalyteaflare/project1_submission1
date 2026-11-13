@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.13.3",
+  "checkpoint_id": "01M7B1G6S5J5E65BPT19RGABNS",
+  "session_id": "01a1d60a-c8c2-7d40-a03a-451f2bc673fc",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-13T18:07:47.186919319Z",
+  "branch": "main",
+  "checkpoints_count": 7,
+  "save_step_count": 2,
+  "files_touched": [
+    "planning/spec.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-luna",
+  "turn_id": "149fd66a7caa",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 45680,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 432896,
+    "output_tokens": 2797,
+    "api_call_count": 15
+  },
+  "session_token_usage": {
+    "input_tokens": 45680,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 432896,
+    "output_tokens": 2797,
+    "api_call_count": 15
+  },
+  "redaction": {
+    "replacements": 6,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 10,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 7
+  }
+}
