@@ -1,0 +1,9 @@
+{
+  "status": 503,
+  "headers": {},
+  "body": {
+    "error": {
+      "message": "Temporarily unavailable"
+    }
+  }
+}
