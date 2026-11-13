@@ -4,7 +4,7 @@ import copy
 import json
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Mapping
@@ -93,12 +93,15 @@ def _retry_after(headers: Mapping[str, str]) -> float | None:
 
 
 class HttpProvider:
-    def __init__(self, config: HttpConfig, *, credential: str, transport: Callable = http_transport):
+    def __init__(self, config: HttpConfig, *, credential: str, transport: Callable = http_transport,
+                 prompt: str = SYSTEM_PROMPT, schema: dict | None = None):
         if not credential or any(character in credential for character in "\r\n"):
             raise ValueError("API_KEY must be a nonempty single-line environment credential")
         self.config = config
         self._credential = credential
         self.transport = transport
+        self.prompt = prompt
+        self.schema = copy.deepcopy(SCHEMA if schema is None else schema)
         self.response_source = f"{config.provider}/{config.model}"
 
     @classmethod
@@ -119,15 +122,34 @@ class HttpProvider:
             raise ValueError("Invalid model configuration; check endpoint, model, temperature and positive limits") from None
         return cls(config, credential=env.get("API_KEY", ""), transport=transport)
 
+    def processing_configuration(self) -> dict[str, Any]:
+        """Describe the actual request configuration without credentials."""
+        request_settings = asdict(self.config)
+        return {
+            "provider": request_settings.pop("provider"), "model": request_settings.pop("model"),
+            "endpoint": request_settings.pop("endpoint"), "request_settings": request_settings,
+            "prompt": self.prompt, "schema": copy.deepcopy(self.schema),
+        }
+
+    @classmethod
+    def from_settings(cls, settings, *, environment: Mapping[str, str] | None = None,
+                      transport: Callable = http_transport):
+        """Rebuild saved settings; obtain credentials afresh, never from state."""
+        env = os.environ if environment is None else environment
+        config = HttpConfig(endpoint=settings.endpoint, model=settings.model,
+                            provider=settings.provider, **settings.request_settings)
+        return cls(config, credential=env.get("API_KEY", ""), transport=transport,
+                   prompt=settings.prompt, schema=settings.schema)
+
     def request_body(self, message: str) -> dict[str, Any]:
         return {
             "model": self.config.model,
-            "messages": build_messages(message, SYSTEM_PROMPT),
+            "messages": build_messages(message, self.prompt),
             "temperature": self.config.temperature,
             "max_completion_tokens": self.config.max_completion_tokens,
             "stream": False,
             "response_format": {"type": "json_schema", "json_schema": {
-                "name": "access_request", "strict": True, "schema": copy.deepcopy(SCHEMA),
+                "name": "access_request", "strict": True, "schema": copy.deepcopy(self.schema),
             }},
         }
 

@@ -71,15 +71,63 @@ saved bytes through an injectable retry handler, even if the source path changes
 Earlier attempts remain identified by their own attempt IDs.
 
 Error records have a null extraction, IT Service Desk ownership and a retry
-description. The `STATE` placeholder in the service's retry command is a future
-state location. This step does not implement the operator CLI or persistent
-retries: durable state is step 6 and executable CLI retry commands are step 8.
+description. The `STATE` placeholder in the in-memory service's retry command is
+a state location to be supplied. `Repository` provides durable retries as
+described below. Executable operator CLI retry commands are step 8.
 
 Provider error bodies and original transport diagnostics are excluded from
 operational records. Controlled diagnostics and credential redaction prevent a
 transport from echoing the configured key into outputs. The adapter emits no raw
 request/response logs. Evidence redacts Authorization and any occurrence of the
 configured credential in its payload.
+
+## Durable state (step 6)
+
+`access_intake/repository.py` supplies `Repository(state_path)` and serializable
+`ProcessingSettings`. Source bytes, their original-byte hash, the filename,
+revision and settings are committed with queued work before provider execution.
+Running work is visible to another connection, and a provider call holds no
+database write lock. SQLite uses WAL, full synchronous commits and a bounded
+five-second lock wait. This step's service executes sequentially; multi-process
+claims, leases and crash recovery remain for step 7.
+
+The service methods are:
+
+| Method | Behavior |
+| --- | --- |
+| `intake(paths, provider=..., settings=...)` | Accept independent documents; reuse identical terminal successes/errors; retain omitted filenames |
+| `history(document_id)` | Return every completed attempt, including current, in acceptance order |
+| `snapshot()` | Read current extractions and matching queue entries in one transaction |
+| `progress()` | Read persisted attempt states, separate from policy status |
+| `saved_attempt(attempt_id)` | Inspect the committed source bytes, settings and attempt identity |
+| `retry(attempt_id, provider_factory=...)` | Create a new attempt from the saved bytes/settings, even after reopening state or changing the source path |
+| `refresh(settings=..., provider_factory=..., router=...)` | Re-extract for changed extraction settings; reroute valid saved facts for a policy-only change |
+
+Attempt completion, its historical result and current-result publication share
+one commit. Changed source bytes create a new revision. A failed retry becomes
+the current error while retaining the earlier success in history. A retry of a
+superseded source stays historical. Export timestamps never select the winning
+revision. The current snapshot contains one terminal result per completed
+document; earlier versions remain available through history.
+
+Extraction fingerprints cover original bytes, provider/model/endpoint, request
+settings, prompt, schema and extraction implementation version. Policy version
+is separate. Policy-only refresh uses no provider call and retains the extraction's
+producing settings and attempt ID alongside the new routing settings/version.
+It leaves extraction errors intact rather than inventing facts. Explicit retry
+or a change to extraction settings can re-extract those errors.
+
+For the HTTP adapter, obtain settings with
+`ProcessingSettings.from_provider(provider)`. The repository checks that the
+injected adapter matches those settings. A retry/refresh factory receives the
+saved `ProcessingSettings`; `HttpProvider.from_settings(settings)` reconstructs
+the saved model, endpoint, request settings, prompt and schema while loading
+`API_KEY` afresh from the environment. Stored settings contain no credential,
+and credential fields are rejected. Tests inject the dummy credential through
+an in-memory mapping and use only a fake HTTP transport.
+
+Repository errors include the saved attempt ID and the actual, shell-quoted
+state path in their retry descriptions. The operator CLI is still step 8.
 
 ## Reproducible evidence and verification
 
@@ -102,3 +150,11 @@ schema, refusal/incompletion, HTTP and transport failures, size limits, producin
 model provenance and credential-redacted evidence. Facts come from the frozen
 source-derived ledger, `tests/expected_facts.json`. Mock agreement verifies
 pipeline behavior, not live extraction accuracy, service availability or quotas.
+
+T31–T35 additionally verify reopen/reuse, committed input before provider calls,
+available writer locks during calls, changed and whitespace-only revisions,
+omitted documents, saved-source/settings retries, retained successes after
+failures, current/history provenance and extraction versus policy refresh.
+Their HTTP-binding subcase verifies that saved prompt/schema/request changes
+reach the real adapter through a fake transport. Synthetic routing changes in
+T35 are labeled test-only; they do not change the supplied office policy.
